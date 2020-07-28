@@ -241,23 +241,26 @@ Object.keys(FEATURE_SOURCES).forEach((key) => {
       FEATURE_SOURCES[key].parsed = true;
       if (Object.keys(FEATURE_SOURCES).every(source => FEATURE_SOURCES[source].parsed)) {
         generateOutfiles();
+        finalize();
       }
 	  });
   });
 });
 
-/*
-// Generate features.json
-console.log('\n- Regenerating features.json');
-fs.stat('./features.json', function (err, stats) {
-  if (err) { return; }
-  console.log(chalk.yellow(`- - Deleting existing features.json...`));
-  fs.unlinkSync('./features.json');
-});
-fs.writeFileSync('./features.json', JSON.stringify(featuresJSON));
-console.log(chalk.green(`- - Regenerated features.json successfully`));
-
-// Done!
-const executionTime = (Date.now() - startTime) / 1000;
-console.log(chalk.green.bold(`Done. (${executionTime}s)`));
-*/
+const finalize = () => {
+  // Generate features.json
+  console.log('\n- Regenerating features.json');
+  try {
+    const stats = fs.statSync('./features.json');
+    console.log(chalk.yellow(`- - Deleting existing features.json...`));
+    fs.unlinkSync('./features.json');
+  } catch (err) {
+    // features.json doesn't exist; do nothing
+  }
+  fs.writeFileSync('./features.json', JSON.stringify(featuresJSON));
+  console.log(chalk.green(`- - Regenerated features.json successfully`));
+  
+  // Done!
+  const executionTime = (Date.now() - startTime) / 1000;
+  console.log(chalk.green.bold(`\nDone. (${executionTime}s)`));
+};
