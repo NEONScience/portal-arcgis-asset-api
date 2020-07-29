@@ -7,7 +7,9 @@ const Koa = require('koa');
 const Router = require('koa-router');
 const Logger = require('koa-logger');
 const Favicon = require('koa-favicon');
+
 const NodeCache = require('node-cache');
+const { gzip } = require('node-gzip');
 
 const api = new Koa();
 const router = new Router();
@@ -78,11 +80,10 @@ router.get('/:feature/:siteCode', (ctx, next) => {
     ctx.body = 'Feature and Site Code are valid but asset not found';
     return;
   }
+  ctx.set('Content-Type', 'application/json');
+  ctx.set('Content-Encoding', 'gzip');
   ctx.body = assetData;
 });
-
-api.use(router.routes());
-api.use(router.allowedMethods());
 
 /**
    Populate Cache
@@ -92,17 +93,21 @@ Object.keys(features).forEach((feature) => {
   features[feature].forEach((siteCode) => {
     const assetKey = getAssetKey(feature, siteCode);
     const assetPath = path.join(ASSETS_PATH, feature, `${siteCode}.json`);
-    const promise = fs.promises.readFile(assetPath).then((assetData) => {
-      cache.set(assetKey, JSON.parse(assetData));
-    });
+    const promise = fs.promises.readFile(assetPath)
+      .then((uncompressedData) => gzip(uncompressedData))
+      .then((compressedData) => {
+        cache.set(assetKey, compressedData);
+      });
     cachePromises.push(promise);
   });
 });
 
 /**
-   Start the API (once cache is populated)
+   Start the API once cache is populated
 */
 Promise.all(cachePromises).then((assets) => {
   console.log(`${assets.length} Assets read into cache`);
+  api.use(router.routes());
+  api.use(router.allowedMethods());
   api.listen(3100);
 });
