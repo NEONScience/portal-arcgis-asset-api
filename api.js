@@ -2,10 +2,12 @@ const fs = require('fs');
 const Koa = require('koa');
 const Router = require('koa-router');
 const Logger = require('koa-logger');
+const Favicon = require('koa-favicon');
 
 const api = new Koa();
 const router = new Router();
 api.use(Logger());
+api.use(Favicon(__dirname + '/public/favicon.ico'));
 
 // features.json must exist and be parseable! (generated from build.js)
 let features = {};
@@ -16,6 +18,23 @@ try {
   console.error('Unable to start API: features.json missing or malformed. Run build.js to regenrate.');
   process.exit(1);
 }
+
+router.get('/', (ctx, next) => {
+  ctx.body = {
+    features: Object.keys(features),
+  };
+});
+
+router.get('/:feature', (ctx, next) => {
+  if (!Object.keys(features).includes(ctx.params.feature)) {
+    ctx.status = 400;
+    ctx.body = 'Invalid Feature';
+    return;
+  }
+  ctx.body = {
+    siteCodes: features[ctx.params.feature],
+  };
+});
 
 router.get('/:feature/:siteCode', (ctx, next) => {
   if (!Object.keys(features).includes(ctx.params.feature)) {
