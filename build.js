@@ -16,34 +16,41 @@ const chalk = require('chalk');
 const fs = require('fs');
 const fsExtra = require('fs-extra');
 const shp = require('shpjs');
+const fetch = require('node-fetch');
 
-const DOWNLOADS_PATH = './downloads';
-const ASSETS_PATH = './assets';
+const DOWNLOADS_PATH = path.join(__dirname, 'downloads');
+const ASSETS_PATH = path.join(__dirname, 'assets');
 
 // Shape Files that we download and parse into geojson
 const FEATURE_SOURCES = {
   TOWER_AIRSHEDS: {
+    sourceId: 'd87cd176dd6a468294fc0ac70918c631',
     zipFile: '90percentfootprint.zip',
     parsed: false,
   },
   AQUATIC_REACHES: {
+    sourceId: '2391e7b863d74afcb066401224e28552',
     zipFile: 'AquaticReach.zip',
     parsed: false,
   },
   FLIGHT_BOX_BOUNDARIES: {
+    sourceId: 'f27616de7f9f401b8732cdf8902ab1d8',
     zipFile: 'AOP_Flightboxes.zip',
     parsed: false,
   },
   SAMPLING_BOUNDARIES: {
+    sourceId: '4a381f124a73490aa9ad7b1df914d6d8',
     zipFile: 'Field_Sampling_Boundaries.zip',
     parsed: false,
   },
   AQUATIC_WATERSHEDS: {
+    sourceId: '869c18de0c874c33b352efad0778a07a',
     zipFile: 'NEONAquaticWatershed.zip',
     parsed: false,
   },
 };
 Object.keys(FEATURE_SOURCES).forEach((key) => { FEATURE_SOURCES[key].KEY = key; });
+const getSourceURL = sourceId => `https://neon.maps.arcgis.com/sharing/rest/content/items/${sourceId}/data`;
 
 // Feature data that we extract fdrom above geojson. Note that there is NOT a 1:1 correlation
 // of feature sources to features... some sources may be parsed out into more than one feature.
@@ -212,38 +219,67 @@ const generateOutfiles = () => {
   });
 };
 
-// Download shape files
-// ...
-
-// Clear the output directory
-console.log('- Clearing output directory');
+// Clear the ASSETS_PATH directory
+console.log('- Clearing assets directory');
 fsExtra.emptyDirSync(ASSETS_PATH);
 
-// Convert all shape files to geojson
-console.log('\n- Converting feature source ZIP files to geojson');
+// Initialize the DOWNLOADS_PATH directory
+console.log('- Making downloads directory');
+try {
+  const downloadsStats = fs.statSync(DOWNLOADS_PATH);
+  fsExtra.emptyDirSync(DOWNLOADS_PATH);
+  fs.rmdirSync(DOWNLOADS_PATH);
+} catch (err) {
+  // downloads dir doesn't exist; do nothing
+}
+fs.mkdirSync(DOWNLOADS_PATH);
+
+// Download shape files
+const downloadPromises = [];
 Object.keys(FEATURE_SOURCES).forEach((key) => {
-  const featureSource = FEATURE_SOURCES[key];
-  const { zipFile } = featureSource;
-  console.log(chalk.yellow(`- - ZIP: ${zipFile} - Reading...`));
-  fs.readFile(path.join(DOWNLOADS_PATH, zipFile), (err, data) => {
-    if (err) {
-      console.log(chalk.red(`- - ZIP: ${zipFile} unable to read:`));
-      console.log(chalk.red(err, ''));
-      return;
-    }
-    console.log(chalk.yellow(`- - ZIP: ${zipFile} read complete; converting shapes...`));
-    shp(data).then((geojson) => {
-      GEOJSON_SOURCES[key] = geojson;
-      console.log(chalk.green(`- - ZIP: ${zipFile} to geojson conversion complete`));
-      // Spit out whole geojson if needed for setting up new features
-      // const outFile = path.join(ASSETS_PATH, `${key}.json`);
-      // fs.writeFileSync(outFile, JSON.stringify(geojson, null, 2));
-      FEATURE_SOURCES[key].parsed = true;
-      if (Object.keys(FEATURE_SOURCES).every(source => FEATURE_SOURCES[source].parsed)) {
-        generateOutfiles();
-        finalize();
+  const { sourceId, zipFile } = FEATURE_SOURCES[key];
+  console.log(chalk.yellow(`- - ZIP: ${zipFile} - Fetching...`));
+  const promise = fetch(getSourceURL(sourceId))
+    .then(res => {
+      return new Promise((resolve, reject) => {
+        const dest = fs.createWriteStream(path.join(DOWNLOADS_PATH, zipFile));
+        dest.on('finish', () => {
+          console.log(chalk.green(`- - ZIP: ${zipFile} - Fetched`));
+          resolve(true);
+        });
+        res.body.pipe(dest);
+      });
+    });
+  downloadPromises.push(promise);
+});
+
+// After download is complete: convert all shape files to geojson
+Promise.all(downloadPromises).then(() => {
+  console.log('\n- Converting feature source ZIP files to geojson');
+  Object.keys(FEATURE_SOURCES).forEach((key) => {
+    const featureSource = FEATURE_SOURCES[key];
+    const { zipFile } = featureSource;
+    console.log(chalk.yellow(`- - ZIP: ${zipFile} - Reading...`));
+    fs.readFile(path.join(DOWNLOADS_PATH, zipFile), (err, data) => {
+      if (err) {
+        console.log(chalk.red(`- - ZIP: ${zipFile} unable to read:`));
+        console.log(chalk.red(err, ''));
+        return;
       }
-	  });
+      console.log(chalk.yellow(`- - ZIP: ${zipFile} read complete; converting shapes...`));
+      shp(data).then((geojson) => {
+        GEOJSON_SOURCES[key] = geojson;
+        console.log(chalk.green(`- - ZIP: ${zipFile} to geojson conversion complete`));
+        // Spit out whole geojson if needed for setting up new features
+        // const outFile = path.join(ASSETS_PATH, `${key}.json`);
+        // fs.writeFileSync(outFile, JSON.stringify(geojson, null, 2));
+        FEATURE_SOURCES[key].parsed = true;
+        if (Object.keys(FEATURE_SOURCES).every(source => FEATURE_SOURCES[source].parsed)) {
+          generateOutfiles();
+          finalize();
+        }
+	    });
+    });
   });
 });
 
@@ -259,6 +295,12 @@ const finalize = () => {
   }
   fs.writeFileSync('./features.json', JSON.stringify(featuresJSON));
   console.log(chalk.green(`- - Regenerated features.json successfully`));
+
+  // Delete all downloads
+  console.log('\n- Clearing downloads directory');
+  fsExtra.emptyDirSync(DOWNLOADS_PATH);
+  console.log('- Removing downloads directory');
+  fs.rmdirSync(DOWNLOADS_PATH);
   
   // Done!
   const executionTime = (Date.now() - startTime) / 1000;
