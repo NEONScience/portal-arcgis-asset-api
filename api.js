@@ -7,12 +7,14 @@ const Koa = require('koa');
 const Router = require('koa-router');
 const Logger = require('koa-logger');
 const Favicon = require('koa-favicon');
+const Cors = require('@koa/cors');
 
 const NodeCache = require('node-cache');
 const { gzip } = require('node-gzip');
 
 const api = new Koa();
 const router = new Router();
+api.use(Cors({ origin: '*', allowMethods: ['GET'] }));
 api.use(Logger());
 api.use(Favicon(__dirname + '/public/favicon.ico'));
 
@@ -32,12 +34,27 @@ try {
   console.error('Unable to start API: features.json missing or malformed. Run build.js to regenrate.');
   process.exit(1);
 }
-const getAssetKey = (feature, siteCode) => `${feature}.${siteCode}`;
 
 /**
-   Initialize Cache
+   Cache
+   The total asset footprint is only a few megabytes, so load everything into a simple
+   in-memory cache. Gzip all JSON as we populate the cache since it doesn't change.
 */
 const cache = new NodeCache({ useClones: false });
+const cachePromises = [];
+const getCacheKey = (feature, siteCode) => `${feature}.${siteCode}`;
+Object.keys(features).forEach((feature) => {
+  features[feature].forEach((siteCode) => {
+    const assetKey = getCacheKey(feature, siteCode);
+    const assetPath = path.join(ASSETS_PATH, feature, `${siteCode}.json`);
+    const promise = fs.promises.readFile(assetPath)
+      .then((uncompressedData) => gzip(uncompressedData))
+      .then((compressedData) => {
+        cache.set(assetKey, compressedData);
+      });
+    cachePromises.push(promise);
+  });
+});
 
 /**
    Routes
@@ -73,8 +90,7 @@ router.get('/:feature/:siteCode', (ctx, next) => {
     ctx.body = 'Site Code not valid for this Feature';
     return;
   }
-  const assetKey = getAssetKey(ctx.params.feature, ctx.params.siteCode);
-  const assetData = cache.get(assetKey);
+  const assetData = cache.get(getCacheKey(ctx.params.feature, ctx.params.siteCode));
   if (assetData === undefined) {
     ctx.status = 404;
     ctx.body = 'Feature and Site Code are valid but asset not found';
@@ -83,23 +99,6 @@ router.get('/:feature/:siteCode', (ctx, next) => {
   ctx.set('Content-Type', 'application/json');
   ctx.set('Content-Encoding', 'gzip');
   ctx.body = assetData;
-});
-
-/**
-   Populate Cache
-*/
-const cachePromises = [];
-Object.keys(features).forEach((feature) => {
-  features[feature].forEach((siteCode) => {
-    const assetKey = getAssetKey(feature, siteCode);
-    const assetPath = path.join(ASSETS_PATH, feature, `${siteCode}.json`);
-    const promise = fs.promises.readFile(assetPath)
-      .then((uncompressedData) => gzip(uncompressedData))
-      .then((compressedData) => {
-        cache.set(assetKey, compressedData);
-      });
-    cachePromises.push(promise);
-  });
 });
 
 /**
