@@ -19,6 +19,7 @@ api.use(Logger());
 api.use(Favicon(__dirname + '/public/favicon.ico'));
 
 const ASSETS_PATH = './assets';
+const API_ROOT = '/api/arcgis-assets';
 
 /**
    Features
@@ -59,15 +60,20 @@ Object.keys(features).forEach((feature) => {
 /**
    Routes
 */
-// ~/ - list all feature keys
-router.get('/', (ctx, next) => {
+// {API_ROOT} - list all feature keys
+router.get(`${API_ROOT}/`, (ctx, next) => {
   ctx.body = {
     features: Object.keys(features),
   };
 });
 
-// ~/{FEATURE} - list all valid Site Codes for a given Feature
-router.get('/:feature', (ctx, next) => {
+// {API_ROOT}/health - health check; if we're running we're good.
+router.get(`${API_ROOT}/health`, (ctx, next) => {
+  ctx.status = 200;
+});
+
+// {API_ROOT}/{FEATURE} - list all valid Site Codes for a given Feature
+router.get(`${API_ROOT}/:feature`, (ctx, next) => {
   if (!Object.keys(features).includes(ctx.params.feature)) {
     ctx.status = 400;
     ctx.body = 'Invalid Feature';
@@ -78,8 +84,8 @@ router.get('/:feature', (ctx, next) => {
   };
 });
 
-// ~/{FEATURE}/{SITECODE} - return the corresponding asset JSON
-router.get('/:feature/:siteCode', (ctx, next) => {
+// {API_ROOT}/{FEATURE}/{SITECODE} - return the corresponding asset JSON
+router.get(`${API_ROOT}/:feature/:siteCode`, (ctx, next) => {
   if (!Object.keys(features).includes(ctx.params.feature)) {
     ctx.status = 400;
     ctx.body = 'Invalid Feature';
