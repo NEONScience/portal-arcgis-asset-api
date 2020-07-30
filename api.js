@@ -60,16 +60,17 @@ Object.keys(features).forEach((feature) => {
 /**
    Routes
 */
+// /health - health check; if we're running we're good.
+// Buried below API root since it's only checked internally.
+router.get('/health', (ctx, next) => {
+  ctx.status = 200;
+});
+
 // {API_ROOT} - list all feature keys
 router.get(`${API_ROOT}/`, (ctx, next) => {
   ctx.body = {
     features: Object.keys(features),
   };
-});
-
-// {API_ROOT}/health - health check; if we're running we're good.
-router.get(`${API_ROOT}/health`, (ctx, next) => {
-  ctx.status = 200;
 });
 
 // {API_ROOT}/{FEATURE} - list all valid Site Codes for a given Feature
