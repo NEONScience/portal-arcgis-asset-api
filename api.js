@@ -12,7 +12,6 @@ const Cors = require('@koa/cors');
 
 const cluster = require('cluster');
 const cache = require('memored');
-const { gzip } = require('node-gzip');
 
 const ASSETS_PATH = './assets';
 const API_ROOT = '/api/arcgis-assets';
@@ -79,8 +78,7 @@ const cacheAllAssets = async () => {
       const assetKey = getAssetKey(feature, siteCode);
       const assetPath = path.join(ASSETS_PATH, feature, `${siteCode}.json`);
       const promise = fs.promises.readFile(assetPath)
-        .then(uncompressedData => gzip(uncompressedData))
-        .then(compressedData => promiseCacheStore(assetKey, compressedData.toJSON()))
+        .then(assetData => promiseCacheStore(assetKey, assetData.toJSON()))
         .catch(error => {
           const annotatedError = `Asset ${assetKey} failed to load and cache; ${error}`;
           logWithPid(annotatedError);
@@ -226,7 +224,6 @@ if (cluster.isMaster) {
           return;
         }
         ctx.set('Content-Type', 'application/json');
-        ctx.set('Content-Encoding', 'gzip');
         ctx.body = assetData;
       });
 

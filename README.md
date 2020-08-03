@@ -8,11 +8,15 @@ This API serves as a stop-gap only. Ultimately NEON plans to serve a comprehensi
 
 **`$ node api.js`**
 
-Start the API. Loads `features.json` first to know what assets are available, then reads, gzips, and caches *all* assets in an in-memory cache. Requests for assets are filled from this cache. We can get away with this because presently the total footprint of assets on disk is only a few megabytes.
+Start the API. Loads `features.json` first to know what assets are available then reads and stores *all* assets in an in-memory cache. Spawns workers based on available CPUs for clustering while maintaining a single common cache instance. Requests for assets are filled from this cache.
+
+Present asset footprint on disk is about 38MB (see `/assets` directory) so all in-memory cache is easily manageable.
 
 **`$ node build.js`**
 
-Rebuild all assets from the [source](https://neon.maps.arcgis.com/home/gallery.html). Assets are downloaded from the ArcGIS gallery and processed from shapefiles into GeoJSON in the **`assets`** directory. In addition a `features.json` file is created in the root directory which serves as the whitelist of available assets so the API knows what to cache and what routes are valid.
+Rebuild all assets from the [source](https://neon.maps.arcgis.com/home/gallery.html). Assets are downloaded from the ArcGIS gallery and processed from shapefiles into GeoJSON in the **`/assets`** directory.
+
+In addition a `features.json` file is created in the root directory. This JSON contains a structure describing all available features and all sites available for each feature. This is used at runtime to inform the API how to build the cache and know which requests are valid without recursive directory traversal or the risk of unexpected assets being somehow present.
 
 Note that all assets and the `features.json` map are in version control. This is because assets rarely change, so for simplicity rebuilding assets should only be done in a development environment as-needed and the updates pushed as a new version of the API.
 
