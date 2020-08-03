@@ -14,7 +14,7 @@ const cluster = require('cluster');
 const cache = require('memored');
 
 const ASSETS_PATH = './assets';
-const API_ROOT = '/api/arcgis-assets';
+const API_ROOT = '/api/v0/arcgis-assets';
 const CPU_COUNT = os.cpus().length;
 
 const logWithPid = (msg, isError = false) => (
