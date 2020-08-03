@@ -27,7 +27,7 @@ Once up and running (by default on port 3100) requests can be made to the API to
 Assets are represented by NEON field site divided into common groups called Features. Querying the root provides the list of available features.
 
 ```
-> http://localhost:3100/api/arcgis-assets/
+> http://localhost:3100/api/v0/arcgis-assets/
 {
   "features": [
     "TOWER_AIRSHEDS",
@@ -39,7 +39,7 @@ Assets are represented by NEON field site divided into common groups called Feat
 Querying a feature provides the list of site codes available for the feature:
 
 ```
-> http://localhost:3100/api/arcgis-assets/TOWER_AIRSHEDS/
+> http://localhost:3100/api/v0/arcgis-assets/TOWER_AIRSHEDS/
 {
   "siteCodes": [
     "ABBY",
@@ -52,7 +52,7 @@ Querying a feature provides the list of site codes available for the feature:
 And querying a valid feature / site code combination will return Gzipped GeoJSON:
 
 ```
-> http://localhost:3100/api/arcgis-assets/TOWER_AIRSHEDS/ABBY
+> http://localhost:3100/api/v0/arcgis-assets/TOWER_AIRSHEDS/ABBY
 {
   "type": "Feature",
   "properties": {
