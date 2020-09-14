@@ -22,7 +22,7 @@
   "devDependencies": {
     "chalk": "^4.1.0",
     "fs-extra": "^9.0.1",
-    "node-fetch": "^2.6.0",
+    "node-fetch": "^2.6.1",
     "shpjs": "^3.5.0"
   }
 }

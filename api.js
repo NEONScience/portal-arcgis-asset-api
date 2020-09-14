@@ -184,6 +184,7 @@ if (cluster.isMaster) {
       // Buried below API root since it's only checked internally.
       router.get('/health', (ctx, next) => {
         ctx.status = 200;
+        ctx.body = { status: 'UP' };
       });
 
       // {API_ROOT} - list all feature keys
