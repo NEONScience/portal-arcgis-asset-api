@@ -119,20 +119,33 @@ Object.keys(FEATURES).forEach(featureKey => featuresJSON[featureKey] = []);
 // Coordinates can also be deeply nested as in a MultiPolygon set, so do it recursively.
 const sanitizeCoordinates = (coords) => {
   if (!Array.isArray(coords)) { return coords; }
+  let sanitizedCoords = [];
   if (Array.isArray(coords[0])) {
-    coords = coords.map(arr => sanitizeCoordinates(arr));
+    sanitizedCoords = coords.map(arr => sanitizeCoordinates(arr));
   } else {
-    if (coords.length === 2 && coords.every(c => Number.isFinite(c))) {
+    // Watershed boundaries can potentially have 3 coordinate values...
+    // Account for this and take the lon,lat presented
+    if ((coords.length === 2 || coords.length === 3) && coords.every(c => Number.isFinite(c))) {
+      // Sanity check to ensure proper interpretation of coords
+      if (coords.length === 3) {
+        if (coords[2] !== 0) {
+          console.log(chalk.red(`- - Identified coord with non-zero z: ${coords}`));
+        }
+      }
       const [x, y] = coords;
       // All NEON features are in the north and west hemispheres, so latitude should always be
       // positive and longitude should always be negative.
       if (x < 0) {
-        coords[0] = y;
-        coords[1] = x;
+        sanitizedCoords.push(y);
+        sanitizedCoords.push(x);
+      } else {
+        console.log(chalk.red(`- - Identified coord with negative x: ${coords}`));
       }
+    } else {
+      console.log(chalk.red(`- - Failed to determine state of coords: ${coords}`));
     }
   }
-  return coords;
+  return sanitizedCoords;
 };
 
 // Parse a converted single geojson object for a feature into a dictionary of geojson objects
