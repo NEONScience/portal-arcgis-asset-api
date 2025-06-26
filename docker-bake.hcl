@@ -1,7 +1,3 @@
-variable "NODE_VERSION" {
-  default = "22.5"
-}
-
 # Populated from GitHub Action
 variable "REPO" {
   default = ""
