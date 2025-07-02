@@ -1,8 +1,3 @@
-# Populated from GitHub Action
-variable "REPO" {
-  default = ""
-}
-
 group "default" {
   targets = [
     "portal-arcgis-asset-api",
