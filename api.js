@@ -140,6 +140,7 @@ const verifyOrBuildCache = async () => {
   }
 };
 
+// console.log("cluster.isMaster===>", cluster.isMaster);
 /**
    Master thread - validate environment and spawn forks
 */

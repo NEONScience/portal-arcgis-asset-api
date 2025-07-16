@@ -1,4 +1,6 @@
 const winston = require('winston');
+const chalk = require('chalk');
+
 
 const logger = winston.createLogger({
   level: 'info',

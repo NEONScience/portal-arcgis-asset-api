@@ -12,7 +12,6 @@ process.on('unhandledRejection', err => {
 });
 
 const path = require('path');
-const chalk = require('chalk');
 const fs = require('fs');
 const fsExtra = require('fs-extra');
 const shp = require('shpjs');
@@ -50,6 +49,7 @@ const FEATURE_SOURCES = {
     parsed: false,
   },
 };
+
 Object.keys(FEATURE_SOURCES).forEach((key) => { FEATURE_SOURCES[key].KEY = key; });
 const getSourceURL = sourceId => `https://neon.maps.arcgis.com/sharing/rest/content/items/${sourceId}/data`;
 
@@ -114,7 +114,7 @@ const FEATURES = {
 // JSON structure used by the API to know what routes exist; built here as we go
 const featuresJSON = {};
 Object.keys(FEATURES).forEach(featureKey => featuresJSON[featureKey] = []);
-
+// console.log("featuresJSON===>", featuresJSON);
 // Shapefiles from the ArcGIS Gallery processed through shpjs produce [lon, lat] coordinates.
 // Leaflet interprets coordinates as [lat,lon], so we have to flip every coordinate.
 // Coordinates can also be deeply nested as in a MultiPolygon set, so do it recursively.
