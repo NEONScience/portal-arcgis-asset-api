@@ -12,8 +12,6 @@ const Cors = require('@koa/cors');
 
 const cluster = require('cluster');
 const cache = require('memored');
-const NodeCache = require('node-cache');
-const { exec } = require('child_process');
 
 const ASSETS_PATH = './assets';
 const API_ROOT = '/api/v0/arcgis-assets';
@@ -104,19 +102,6 @@ const getAssetData = (feature, siteCode) => {
   });
 };
 
-// In-memory cache for API responses (10 min TTL)
-const apiResponseCache = new NodeCache({ stdTTL: 600 });
-
-// Wrap getAssetData with cache
-async function getAssetDataCached(feature, siteCode) {
-  const cacheKey = `${feature}:${siteCode}`;
-  let data = apiResponseCache.get(cacheKey);
-  if (data) { return data; }
-  data = await getAssetData(feature, siteCode);
-  if (data) { apiResponseCache.set(cacheKey, data); }
-  return data;
-}
-
 /**
    verifyOrBuildCache
    Main function to either trigger all build events to warm the cache or confirm it's already ready
@@ -161,7 +146,7 @@ if (cluster.isMaster) {
   const cacheWarmer = cluster.fork();
   cacheWarmer.on('message', (msg) => {
     if (msg.error) {
-      logWithPid(msg.error, true);
+      clogWithPid(msg.error, true);
       process.exit(1);
     }
     if (msg.cacheIsReady && CPU_COUNT > 1) {
@@ -235,7 +220,7 @@ if (cluster.isMaster) {
           ctx.body = 'Site Code not valid for this Feature';
           return;
         }
-        const assetData = await getAssetDataCached(ctx.params.feature, ctx.params.siteCode);
+        const assetData = await getAssetData(ctx.params.feature, ctx.params.siteCode);
         if (!assetData) {
           ctx.status = 404;
           ctx.body = 'Feature and Site Code are valid but asset not found';
@@ -243,46 +228,6 @@ if (cluster.isMaster) {
         }
         ctx.set('Content-Type', 'application/json');
         ctx.body = assetData;
-      });
-
-
-
-      /*
-      * Admin Routes -- Prototype only, not for production
-      */
-
-      // Add this route for triggering the build
-      const ADMIN_USER = process.env.ADMIN_USER || 'admin';
-      const ADMIN_PASS = process.env.ADMIN_PASS || 'password';
-
-      router.post('/admin/build', async (ctx, next) => {
-        ctx.set('Content-Type', 'application/json');
-        const auth = ctx.headers['authorization'];
-
-        if (!auth || !auth.startsWith('Basic ')) {
-          ctx.status = 401;
-          ctx.set('WWW-Authenticate', 'Basic');
-          ctx.body = { success: false, error: 'Unauthorized' };
-          return;
-        }
-
-        const [user, pass] = Buffer.from(auth.split(' ')[1], 'base64').toString().split(':');
-
-        if (user !== ADMIN_USER || pass !== ADMIN_PASS) {
-          ctx.status = 401;
-          ctx.body = { success: false, error: 'Unauthorized' };
-          return;
-        }
-
-        await exec('node build.js', (error, stdout, stderr) => {
-          console.log('-->admin/build', error, stdout, stderr);
-          if (error) {
-            ctx.status = 500;
-            ctx.body = { success: false, error: error.message, stderr };
-            return;
-          }
-          ctx.body = { success: true, stdout };
-        });
       });
 
       /**
