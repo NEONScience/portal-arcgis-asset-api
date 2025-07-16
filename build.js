@@ -114,7 +114,7 @@ const FEATURES = {
 // JSON structure used by the API to know what routes exist; built here as we go
 const featuresJSON = {};
 Object.keys(FEATURES).forEach(featureKey => featuresJSON[featureKey] = []);
-// console.log("featuresJSON===>", featuresJSON);
+
 // Shapefiles from the ArcGIS Gallery processed through shpjs produce [lon, lat] coordinates.
 // Leaflet interprets coordinates as [lat,lon], so we have to flip every coordinate.
 // Coordinates can also be deeply nested as in a MultiPolygon set, so do it recursively.
@@ -213,7 +213,7 @@ const generateOutfiles = () => {
     log.info(`- - ${key} - Parsing sites...`);
     const sites = geojsonToSites(geojson, feature.getProperties);
     const expectedSiteCount = Object.keys(sites).length;
-    if (!expectedSiteCount) {
+    if (expectedSiteCount === 0) {
       log.error(`- - ${key} no sites parsed; aborting`);
       return;
     }
