@@ -288,11 +288,17 @@ fs.mkdirSync(DOWNLOADS_PATH);
 const downloadPromises = [];
 Object.keys(FEATURE_SOURCES).forEach((key) => {
   const { sourceId, zipFile } = FEATURE_SOURCES[key];
+  const zipPath = path.join(DOWNLOADS_PATH, zipFile);
+  if (fs.existsSync(zipPath)) {
+    log.info(`- - ZIP: ${zipFile} already exists, using cached file.`);
+    downloadPromises.push(Promise.resolve(true));
+    return;
+  }
   log.info(`- - ZIP: ${zipFile} - Fetching...`);
   const promise = fetch(getSourceURL(sourceId))
     .then(res => {
       return new Promise((resolve, reject) => {
-        const dest = fs.createWriteStream(path.join(DOWNLOADS_PATH, zipFile));
+        const dest = fs.createWriteStream(zipPath);
         dest.on('finish', () => {
           log.success(`- - ZIP: ${zipFile} - Fetched`);
           resolve(true);
@@ -352,6 +358,7 @@ const finalize = () => {
   fs.writeFileSync('./features.json', JSON.stringify(featuresJSON));
   log.success(`- - Regenerated features.json successfully`);
 
+  // might be a good to check the file size of the  zip file and compare it to the size of the downloaded file
   // Delete all downloads
   log.info('\n- Clearing downloads directory');
   fsExtra.emptyDirSync(DOWNLOADS_PATH);

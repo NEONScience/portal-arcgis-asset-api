@@ -12,6 +12,7 @@ const Cors = require('@koa/cors');
 
 const cluster = require('cluster');
 const cache = require('memored');
+const NodeCache = require('node-cache');
 
 const ASSETS_PATH = './assets';
 const API_ROOT = '/api/v0/arcgis-assets';
@@ -101,6 +102,19 @@ const getAssetData = (feature, siteCode) => {
     });
   });
 };
+
+// In-memory cache for API responses (10 min TTL)
+const apiResponseCache = new NodeCache({ stdTTL: 600 });
+
+// Wrap getAssetData with cache
+async function getAssetDataCached(feature, siteCode) {
+  const cacheKey = `${feature}:${siteCode}`;
+  let data = apiResponseCache.get(cacheKey);
+  if (data) { return data; }
+  data = await getAssetData(feature, siteCode);
+  if (data) { apiResponseCache.set(cacheKey, data); }
+  return data;
+}
 
 /**
    verifyOrBuildCache
@@ -220,7 +234,7 @@ if (cluster.isMaster) {
           ctx.body = 'Site Code not valid for this Feature';
           return;
         }
-        const assetData = await getAssetData(ctx.params.feature, ctx.params.siteCode);
+        const assetData = await getAssetDataCached(ctx.params.feature, ctx.params.siteCode);
         if (!assetData) {
           ctx.status = 404;
           ctx.body = 'Feature and Site Code are valid but asset not found';
