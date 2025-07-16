@@ -291,26 +291,32 @@ Promise.all(downloadPromises).then(() => {
     const featureSource = FEATURE_SOURCES[key];
     const { zipFile } = featureSource;
     console.log(chalk.yellow(`- - ZIP: ${zipFile} - Reading...`));
-    fs.readFile(path.join(DOWNLOADS_PATH, zipFile), (err, data) => {
-      if (err) {
+    (async () => {
+      try {
+        const data = await fs.promises.readFile(path.join(DOWNLOADS_PATH, zipFile));
+        console.log(chalk.yellow(`- - ZIP: ${zipFile} read complete; converting shapes...`));
+        shp(data).then((geojson) => {
+          GEOJSON_SOURCES[key] = geojson;
+          console.log(chalk.green(`- - ZIP: ${zipFile} to geojson conversion complete`));
+          // Spit out whole geojson if needed for setting up new features
+          // const outFile = path.join(ASSETS_PATH, `${key}.json`);
+          // fs.writeFileSync(outFile, JSON.stringify(geojson, null, 2));
+          FEATURE_SOURCES[key].parsed = true;
+          if (Object.keys(FEATURE_SOURCES).every(source => FEATURE_SOURCES[source].parsed)) {
+            generateOutfiles();
+            finalize();
+          }
+        });
+      } catch (err) {
         console.log(chalk.red(`- - ZIP: ${zipFile} unable to read:`));
         console.log(chalk.red(err, ''));
-        return;
-      }
-      console.log(chalk.yellow(`- - ZIP: ${zipFile} read complete; converting shapes...`));
-      shp(data).then((geojson) => {
-        GEOJSON_SOURCES[key] = geojson;
-        console.log(chalk.green(`- - ZIP: ${zipFile} to geojson conversion complete`));
-        // Spit out whole geojson if needed for setting up new features
-        // const outFile = path.join(ASSETS_PATH, `${key}.json`);
-        // fs.writeFileSync(outFile, JSON.stringify(geojson, null, 2));
         FEATURE_SOURCES[key].parsed = true;
         if (Object.keys(FEATURE_SOURCES).every(source => FEATURE_SOURCES[source].parsed)) {
           generateOutfiles();
           finalize();
         }
-	    });
-    });
+      }
+    })();
   });
 });
 
