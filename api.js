@@ -13,6 +13,7 @@ const Cors = require('@koa/cors');
 const cluster = require('cluster');
 const cache = require('memored');
 const NodeCache = require('node-cache');
+const { exec } = require('child_process');
 
 const ASSETS_PATH = './assets';
 const API_ROOT = '/api/v0/arcgis-assets';
@@ -244,13 +245,53 @@ if (cluster.isMaster) {
         ctx.body = assetData;
       });
 
+
+
+      /*
+      * Admin Routes -- Prototype only, not for production
+      */
+
+      // Add this route for triggering the build
+      const ADMIN_USER = process.env.ADMIN_USER || 'admin';
+      const ADMIN_PASS = process.env.ADMIN_PASS || 'password';
+
+      router.post('/admin/build', async (ctx, next) => {
+        ctx.set('Content-Type', 'application/json');
+        const auth = ctx.headers['authorization'];
+
+        if (!auth || !auth.startsWith('Basic ')) {
+          ctx.status = 401;
+          ctx.set('WWW-Authenticate', 'Basic');
+          ctx.body = { success: false, error: 'Unauthorized' };
+          return;
+        }
+
+        const [user, pass] = Buffer.from(auth.split(' ')[1], 'base64').toString().split(':');
+
+        if (user !== ADMIN_USER || pass !== ADMIN_PASS) {
+          ctx.status = 401;
+          ctx.body = { success: false, error: 'Unauthorized' };
+          return;
+        }
+
+        await exec('node build.js', (error, stdout, stderr) => {
+          console.log('-->admin/build', error, stdout, stderr);
+          if (error) {
+            ctx.status = 500;
+            ctx.body = { success: false, error: error.message, stderr };
+            return;
+          }
+          ctx.body = { success: true, stdout };
+        });
+      });
+
       /**
          Start the API
       */
       api.use(router.routes());
       api.use(router.allowedMethods());
       api.listen(PORT);
-      logWithPid(`Worker started on port ${PORT}`);
+      logWithPid(`Worker started on port http://localhost:${PORT}`);
     });
 
 }
