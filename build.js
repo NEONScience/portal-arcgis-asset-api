@@ -148,9 +148,13 @@ const sanitizeCoordinates = (coords) => {
   return sanitizedCoords;
 };
 
-// Parse a converted single geojson object for a feature into a dictionary of geojson objects
-// keyed by siteCode. Also sanitize coordinates and properties.
-// getProperties function comes from FEATURES
+/**
+ * Parse a converted single geojson object for a feature into a dictionary of geojson objects
+ * keyed by siteCode. Also sanitize coordinates and properties.
+ * @param {Object} geojson - The GeoJSON object to parse.
+ * @param {Function} getProperties - Function to extract properties from each feature.
+ * @returns {Object} Dictionary of siteCode to geojson feature.
+ */
 const geojsonToSites = (geojson = {}, getProperties = p => p) => {
   const sites = {};
   if (!geojson.features) { return sites; }
@@ -175,22 +179,36 @@ const geojsonToSites = (geojson = {}, getProperties = p => p) => {
   return sites;
 };
 
-// Create a directory of geojson files named for their site (e.g. ABBY.json)
-const generateFeatureSiteFilesDirectory = (featureKey, sitesData) => {
+/**
+ * Create a directory of geojson files named for their site (e.g. ABBY.json)
+ * @param {string} featureKey - The feature key (directory name)
+ * @param {Object} sitesData - Dictionary of siteCode to geojson feature
+ * @returns {Promise<number>} Number of successfully written files
+ */
+const generateFeatureSiteFilesDirectory = async (featureKey, sitesData) => {
   if (!Object.keys(FEATURES).includes(featureKey)) { return 0; }
-  let count = 0;
+  const outDir = path.join(ASSETS_PATH, featureKey);
   try {
-    const outDir = path.join(ASSETS_PATH, featureKey);
-    fs.mkdirSync(outDir);
-    Object.keys(sitesData).forEach((siteCode) => {
-      const outFile = path.join(outDir, `${siteCode}.json`);
-      fs.writeFileSync(outFile, JSON.stringify(sitesData[siteCode]));
-      count += 1;
-    });
+    await fs.promises.mkdir(outDir, { recursive: true });
   } catch (err) {
-    console.error(err);
+    console.error(chalk.red(`[ERROR] Failed to create directory: ${outDir}`), err);
+    return 0;
   }
-  return count;
+  let successCount = 0;
+  const writePromises = Object.entries(sitesData).map(async ([siteCode, data]) => {
+    const outFile = path.join(outDir, `${siteCode}.json`);
+    try {
+      await fs.promises.writeFile(outFile, JSON.stringify(data, null, 2));
+      successCount++;
+    } catch (err) {
+      console.error(chalk.red(`[ERROR] Failed to write file: ${outFile}`), err);
+    }
+  });
+  await Promise.all(writePromises);
+  if (successCount !== Object.keys(sitesData).length) {
+    console.log(chalk.red(`[WARN] ${featureKey}: ${Object.keys(sitesData).length - successCount} files failed to write.`));
+  }
+  return successCount;
 };
 
 console.log(chalk.underline('=== Building Deferred JSON Artifacts ===\n'));
