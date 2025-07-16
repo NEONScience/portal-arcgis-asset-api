@@ -17,11 +17,13 @@ const ASSETS_PATH = './assets';
 const API_ROOT = '/api/v0/arcgis-assets';
 const CPU_COUNT = os.cpus().length;
 
+const log = require('./logger');
+
 
 const logWithPid = (msg, isError = false) => (
   isError
-    ? console.error(`[PID ${process.pid}] ERROR: ${msg}`)
-    : console.log(`[PID ${process.pid}] ${msg}`)
+    ? log.error(`[PID ${process.pid}] ERROR: ${msg}`)
+    : log.info(`[PID ${process.pid}] ${msg}`)
 );
 
 const PORT = process.env.PORT || 3100;
@@ -149,7 +151,8 @@ if (cluster.isMaster) {
   const cacheWarmer = cluster.fork();
   cacheWarmer.on('message', (msg) => {
     if (msg.error) {
-      clogWithPid(msg.error, true);
+      logWithPid(msg.error, true);
+      log.error(msg.error);
       process.exit(1);
     }
     if (msg.cacheIsReady && CPU_COUNT > 1) {

@@ -17,6 +17,7 @@ const fs = require('fs');
 const fsExtra = require('fs-extra');
 const shp = require('shpjs');
 const fetch = require('node-fetch');
+const log = require('./logger');
 
 const DOWNLOADS_PATH = path.join(__dirname, 'downloads');
 const ASSETS_PATH = path.join(__dirname, 'assets');
@@ -129,7 +130,7 @@ const sanitizeCoordinates = (coords) => {
       // Sanity check to ensure proper interpretation of coords
       if (coords.length === 3) {
         if (coords[2] !== 0) {
-          console.log(chalk.red(`- - Identified coord with non-zero z: ${coords}`));
+          log.warn(`Identified coord with non-zero z: ${coords}`);
         }
       }
       const [x, y] = coords;
@@ -139,10 +140,10 @@ const sanitizeCoordinates = (coords) => {
         sanitizedCoords.push(y);
         sanitizedCoords.push(x);
       } else {
-        console.log(chalk.red(`- - Identified coord with negative x: ${coords}`));
+        log.warn(`Identified coord with negative x: ${coords}`);
       }
     } else {
-      console.log(chalk.red(`- - Failed to determine state of coords: ${coords}`));
+      log.warn(`Failed to determine state of coords: ${coords}`);
     }
   }
   return sanitizedCoords;
@@ -188,32 +189,32 @@ const generateFeatureSiteFilesDirectory = (featureKey, sitesData) => {
       count += 1;
     });
   } catch (err) {
-    console.error(err);
+    log.error(err);
   }
   return count;
 };
 
-console.log(chalk.underline('=== Building Deferred JSON Artifacts ===\n'));
+log.info('=== Building Deferred JSON Artifacts ===\n');
 
 // Extract feature data from converted geojson and render out to files (async step)
 const GEOJSON_SOURCES = {};
 const generateOutfiles = () => {
-  console.log('\n- Generating feature data files');
+  log.info('\n- Generating feature data files');
   Object.keys(FEATURES).forEach((key) => {
     const feature = FEATURES[key];
     const { source } = feature;
     if (!source || !GEOJSON_SOURCES[source]) {
-      console.log(chalk.red(`- - ${key} unable to generate; invalid source: ${source}`));
+      log.error(`- - ${key} unable to generate; invalid source: ${source}`);
       return;
     }
     const geojson = (feature.geojsonFileName
       ? GEOJSON_SOURCES[source].find(fc => fc.fileName === feature.geojsonFileName)
       : GEOJSON_SOURCES[source]) || {};
-    console.log(chalk.yellow(`- - ${key} - Parsing sites...`));
+    log.info(`- - ${key} - Parsing sites...`);
     const sites = geojsonToSites(geojson, feature.getProperties);
     const expectedSiteCount = Object.keys(sites).length;
     if (!expectedSiteCount) {
-      console.log(chalk.red(`- - ${key} no sites parsed; aborting`));
+      log.error(`- - ${key} no sites parsed; aborting`);
       return;
     }
     // Add site codes to this feature in featuresJSON
@@ -222,22 +223,22 @@ const generateOutfiles = () => {
       .forEach((siteCode) => {
         featuresJSON[key].push(siteCode);
       });
-    console.log(chalk.yellow(`- - ${key} - Writing site JSON files...`));
+    log.info(`- - ${key} - Writing site JSON files...`);
     const resultSiteCount = generateFeatureSiteFilesDirectory(key, sites);
     if (resultSiteCount !== expectedSiteCount) {
-      console.log(chalk.red(`- - ${key} expected ${expectedSiteCount} site files; ${resultSiteCount} generated:`));
+      log.error(`- - ${key} expected ${expectedSiteCount} site files; ${resultSiteCount} generated:`);
     } else {
-      console.log(chalk.green(`- - ${key} generated ${resultSiteCount} site files`));
+      log.success(`- - ${key} generated ${resultSiteCount} site files`);
     }
   });
 };
 
 // Clear the ASSETS_PATH directory
-console.log('- Clearing assets directory');
+log.info('- Clearing assets directory');
 fsExtra.emptyDirSync(ASSETS_PATH);
 
 // Initialize the DOWNLOADS_PATH directory
-console.log('- Making downloads directory');
+log.info('- Making downloads directory');
 try {
   const downloadsStats = fs.statSync(DOWNLOADS_PATH);
   fsExtra.emptyDirSync(DOWNLOADS_PATH);
@@ -251,13 +252,13 @@ fs.mkdirSync(DOWNLOADS_PATH);
 const downloadPromises = [];
 Object.keys(FEATURE_SOURCES).forEach((key) => {
   const { sourceId, zipFile } = FEATURE_SOURCES[key];
-  console.log(chalk.yellow(`- - ZIP: ${zipFile} - Fetching...`));
+  log.info(`- - ZIP: ${zipFile} - Fetching...`);
   const promise = fetch(getSourceURL(sourceId))
     .then(res => {
       return new Promise((resolve, reject) => {
         const dest = fs.createWriteStream(path.join(DOWNLOADS_PATH, zipFile));
         dest.on('finish', () => {
-          console.log(chalk.green(`- - ZIP: ${zipFile} - Fetched`));
+          log.success(`- - ZIP: ${zipFile} - Fetched`);
           resolve(true);
         });
         res.body.pipe(dest);
@@ -268,21 +269,21 @@ Object.keys(FEATURE_SOURCES).forEach((key) => {
 
 // After download is complete: convert all shape files to geojson
 Promise.all(downloadPromises).then(() => {
-  console.log('\n- Converting feature source ZIP files to geojson');
+  log.info('\n- Converting feature source ZIP files to geojson');
   Object.keys(FEATURE_SOURCES).forEach((key) => {
     const featureSource = FEATURE_SOURCES[key];
     const { zipFile } = featureSource;
-    console.log(chalk.yellow(`- - ZIP: ${zipFile} - Reading...`));
+    log.info(`- - ZIP: ${zipFile} - Reading...`);
     fs.readFile(path.join(DOWNLOADS_PATH, zipFile), (err, data) => {
       if (err) {
-        console.log(chalk.red(`- - ZIP: ${zipFile} unable to read:`));
-        console.log(chalk.red(err, ''));
+        log.error(`- - ZIP: ${zipFile} unable to read:`);
+        log.error(err, '');
         return;
       }
-      console.log(chalk.yellow(`- - ZIP: ${zipFile} read complete; converting shapes...`));
+      log.info(`- - ZIP: ${zipFile} read complete; converting shapes...`);
       shp(data).then((geojson) => {
         GEOJSON_SOURCES[key] = geojson;
-        console.log(chalk.green(`- - ZIP: ${zipFile} to geojson conversion complete`));
+        log.success(`- - ZIP: ${zipFile} to geojson conversion complete`);
         // Spit out whole geojson if needed for setting up new features
         // const outFile = path.join(ASSETS_PATH, `${key}.json`);
         // fs.writeFileSync(outFile, JSON.stringify(geojson, null, 2));
@@ -298,24 +299,24 @@ Promise.all(downloadPromises).then(() => {
 
 const finalize = () => {
   // Generate features.json
-  console.log('\n- Regenerating features.json');
+  log.info('\n- Regenerating features.json');
   try {
     const stats = fs.statSync('./features.json');
-    console.log(chalk.yellow(`- - Deleting existing features.json...`));
+    log.info(`- - Deleting existing features.json...`);
     fs.unlinkSync('./features.json');
   } catch (err) {
     // features.json doesn't exist; do nothing
   }
   fs.writeFileSync('./features.json', JSON.stringify(featuresJSON));
-  console.log(chalk.green(`- - Regenerated features.json successfully`));
+  log.success(`- - Regenerated features.json successfully`);
 
   // Delete all downloads
-  console.log('\n- Clearing downloads directory');
+  log.info('\n- Clearing downloads directory');
   fsExtra.emptyDirSync(DOWNLOADS_PATH);
-  console.log('- Removing downloads directory');
+  log.info('- Removing downloads directory');
   fs.rmdirSync(DOWNLOADS_PATH);
   
   // Done!
   const executionTime = (Date.now() - startTime) / 1000;
-  console.log(chalk.green.bold(`\nDone. (${executionTime}s)`));
+  log.success(`\nDone. (${executionTime}s)`);
 };
