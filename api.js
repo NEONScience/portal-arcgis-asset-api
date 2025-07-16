@@ -17,6 +17,7 @@ const ASSETS_PATH = './assets';
 const API_ROOT = '/api/v0/arcgis-assets';
 const CPU_COUNT = os.cpus().length;
 
+
 const logWithPid = (msg, isError = false) => (
   isError
     ? console.error(`[PID ${process.pid}] ERROR: ${msg}`)
@@ -89,6 +90,8 @@ const cacheAllAssets = async () => {
       cachePromises.push(promise);
     });
   });
+
+
   return Promise.allSettled(cachePromises);
 }
 
