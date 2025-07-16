@@ -23,6 +23,8 @@ const logWithPid = (msg, isError = false) => (
     : console.log(`[PID ${process.pid}] ${msg}`)
 );
 
+const PORT = process.env.PORT || 3100;
+
 /**
    General Cache Functions
 */
@@ -144,7 +146,7 @@ if (cluster.isMaster) {
   const cacheWarmer = cluster.fork();
   cacheWarmer.on('message', (msg) => {
     if (msg.error) {
-      clogWithPid(msg.error, true);
+      logWithPid(msg.error, true);
       process.exit(1);
     }
     if (msg.cacheIsReady && CPU_COUNT > 1) {
@@ -219,7 +221,7 @@ if (cluster.isMaster) {
           return;
         }
         const assetData = await getAssetData(ctx.params.feature, ctx.params.siteCode);
-        if (assetData === undefined) {
+        if (!assetData) {
           ctx.status = 404;
           ctx.body = 'Feature and Site Code are valid but asset not found';
           return;
@@ -233,8 +235,8 @@ if (cluster.isMaster) {
       */
       api.use(router.routes());
       api.use(router.allowedMethods());
-      api.listen(3100);
-      logWithPid('Worker started');
+      api.listen(PORT);
+      logWithPid(`Worker started on port ${PORT}`);
     });
 
 }
