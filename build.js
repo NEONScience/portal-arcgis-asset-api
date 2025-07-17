@@ -48,10 +48,23 @@ const FEATURE_SOURCES = {
     zipFile: 'NEONAquaticWatershed.zip',
     parsed: false,
   },
+  /*
+  DRAINAGE_LINES: {
+    sourceId: '--GET-FROM-JEREMY-OR-CHRISTINE',
+    zipFile: 'NEON-GET_FILE_NAME.zip',
+    parsed: false,
+  },
+  */
+  POUR_POINTS: {
+    sourceId: '869c18de0c874c33b352efad0778a07a',
+    zipFile: 'NEON-NEONPour_Points.zip',
+    parsed: false,
+  },
 };
 
 Object.keys(FEATURE_SOURCES).forEach((key) => { FEATURE_SOURCES[key].KEY = key; });
 const getSourceURL = sourceId => `https://neon.maps.arcgis.com/sharing/rest/content/items/${sourceId}/data`;
+
 
 // Feature data that we extract fdrom above geojson. Note that there is NOT a 1:1 correlation
 // of feature sources to features... some sources may be parsed out into more than one feature.
@@ -105,7 +118,7 @@ const FEATURES = {
     source: FEATURE_SOURCES.AQUATIC_WATERSHEDS.KEY,
     geojsonFileName: 'NEON_Aquatic_PourPoint',
     getProperties: (properties) => {
-      const { SiteID: siteCode } = properties;
+      const { siteCode } = properties;
       return { siteCode };
     }
   },
@@ -155,8 +168,9 @@ const sanitizeCoordinates = (coords) => {
 const geojsonToSites = (geojson = {}, getProperties = p => p) => {
   const sites = {};
   if (!geojson.features) { return sites; }
+
   geojson.features.forEach((feature) => {
-    if (!feature.geometry) { return; }
+    if (!feature.geometry) { return; } 
     const geometry = {
       type: feature.geometry.type,
       coordinates: sanitizeCoordinates(feature.geometry.coordinates),
@@ -173,6 +187,7 @@ const geojsonToSites = (geojson = {}, getProperties = p => p) => {
       sites[siteCode].geometry.coordinates.push(geometry.coordinates);
     }
   });
+
   return sites;
 };
 
@@ -212,8 +227,9 @@ const generateOutfiles = () => {
       : GEOJSON_SOURCES[source]) || {};
     log.info(`- - ${key} - Parsing sites...`);
     const sites = geojsonToSites(geojson, feature.getProperties);
+
     const expectedSiteCount = Object.keys(sites).length;
-    if (expectedSiteCount === 0) {
+    if (!expectedSiteCount) {
       log.error(`- - ${key} no sites parsed; aborting`);
       return;
     }
@@ -253,9 +269,13 @@ const downloadPromises = [];
 Object.keys(FEATURE_SOURCES).forEach((key) => {
   const { sourceId, zipFile } = FEATURE_SOURCES[key];
   log.info(`- - ZIP: ${zipFile} - Fetching...`);
-  const promise = fetch(getSourceURL(sourceId))
+
+  const url = getSourceURL(sourceId);
+  console.log("res===>%s\s", url);
+  const promise = fetch(url)
     .then(res => {
       return new Promise((resolve, reject) => {
+
         const dest = fs.createWriteStream(path.join(DOWNLOADS_PATH, zipFile));
         dest.on('finish', () => {
           log.success(`- - ZIP: ${zipFile} - Fetched`);
