@@ -11,13 +11,14 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@koa/cors": "^3.1.0",
+    "@koa/cors": "^5.0.0",
     "cluster": "^0.7.7",
     "koa": "^2.13.0",
     "koa-favicon": "^2.1.0",
     "koa-logger": "^3.2.1",
     "koa-router": "^9.1.0",
-    "memored": "^1.1.1"
+    "memored": "^1.1.1",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "chalk": "^4.1.0",

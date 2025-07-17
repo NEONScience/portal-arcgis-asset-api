@@ -17,11 +17,16 @@ const ASSETS_PATH = './assets';
 const API_ROOT = '/api/v0/arcgis-assets';
 const CPU_COUNT = os.cpus().length;
 
+const log = require('./logger');
+
+
 const logWithPid = (msg, isError = false) => (
   isError
-    ? console.error(`[PID ${process.pid}] ERROR: ${msg}`)
-    : console.log(`[PID ${process.pid}] ${msg}`)
+    ? log.error(`[PID ${process.pid}] ERROR: ${msg}`)
+    : log.info(`[PID ${process.pid}] ${msg}`)
 );
+
+const PORT = process.env.PORT || 3100;
 
 /**
    General Cache Functions
@@ -87,6 +92,8 @@ const cacheAllAssets = async () => {
       cachePromises.push(promise);
     });
   });
+
+
   return Promise.allSettled(cachePromises);
 }
 
@@ -144,7 +151,8 @@ if (cluster.isMaster) {
   const cacheWarmer = cluster.fork();
   cacheWarmer.on('message', (msg) => {
     if (msg.error) {
-      clogWithPid(msg.error, true);
+      logWithPid(msg.error, true);
+      log.error(msg.error);
       process.exit(1);
     }
     if (msg.cacheIsReady && CPU_COUNT > 1) {
@@ -219,7 +227,7 @@ if (cluster.isMaster) {
           return;
         }
         const assetData = await getAssetData(ctx.params.feature, ctx.params.siteCode);
-        if (assetData === undefined) {
+        if (!assetData) {
           ctx.status = 404;
           ctx.body = 'Feature and Site Code are valid but asset not found';
           return;
@@ -233,8 +241,8 @@ if (cluster.isMaster) {
       */
       api.use(router.routes());
       api.use(router.allowedMethods());
-      api.listen(3100);
-      logWithPid('Worker started');
+      api.listen(PORT);
+      logWithPid(`Worker started on port http://localhost:${PORT}`);
     });
 
 }
