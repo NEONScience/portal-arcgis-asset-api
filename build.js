@@ -54,12 +54,13 @@ const FEATURE_SOURCES = {
     zipFile: 'NEON-GET_FILE_NAME.zip',
     parsed: false,
   },
-  */
+
   POUR_POINTS: {
     sourceId: '869c18de0c874c33b352efad0778a07a',
-    zipFile: 'NEON-NEONPour_Points.zip',
+    zipFile: 'NEON_Aquatic_PourPoint.zip',
     parsed: false,
   },
+   */
 };
 
 Object.keys(FEATURE_SOURCES).forEach((key) => { FEATURE_SOURCES[key].KEY = key; });
@@ -118,7 +119,7 @@ const FEATURES = {
     source: FEATURE_SOURCES.AQUATIC_WATERSHEDS.KEY,
     geojsonFileName: 'NEON_Aquatic_PourPoint',
     getProperties: (properties) => {
-      const { siteCode } = properties;
+      const { SiteID: siteCode } = properties;
       return { siteCode };
     }
   },
@@ -271,7 +272,7 @@ Object.keys(FEATURE_SOURCES).forEach((key) => {
   log.info(`- - ZIP: ${zipFile} - Fetching...`);
 
   const url = getSourceURL(sourceId);
-  console.log("res===>%s\s", url);
+
   const promise = fetch(url)
     .then(res => {
       return new Promise((resolve, reject) => {
@@ -296,7 +297,7 @@ Promise.all(downloadPromises).then(() => {
     log.info(`- - ZIP: ${zipFile} - Reading...`);
     fs.readFile(path.join(DOWNLOADS_PATH, zipFile), (err, data) => {
       if (err) {
-        log.error(`- - ZIP: ${zipFile} unable to read:`);
+        log.warn(`- - ZIP: ${zipFile} unable to read:`);
         log.error(err, '');
         return;
       }
