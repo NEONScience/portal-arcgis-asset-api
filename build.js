@@ -18,6 +18,7 @@ const shp = require('shpjs');
 const fetch = require('node-fetch');
 const log = require('./logger');
 
+
 const DOWNLOADS_PATH = path.join(__dirname, 'downloads');
 const ASSETS_PATH = path.join(__dirname, 'assets');
 
@@ -48,23 +49,22 @@ const FEATURE_SOURCES = {
     zipFile: 'NEONAquaticWatershed.zip',
     parsed: false,
   },
-  /*
   DRAINAGE_LINES: {
-    sourceId: '--GET-FROM-JEREMY-OR-CHRISTINE',
-    zipFile: 'NEON-GET_FILE_NAME.zip',
+    sourceId: '869c18de0c874c33b352efad0778a07a',
+    zipFile: 'NEONAquaticWatershed.zip',
     parsed: false,
   },
-
   POUR_POINTS: {
     sourceId: '869c18de0c874c33b352efad0778a07a',
-    zipFile: 'NEON_Aquatic_PourPoint.zip',
+    zipFile: 'NEONAquaticWatershed.zip',
     parsed: false,
   },
-   */
 };
 
 Object.keys(FEATURE_SOURCES).forEach((key) => { FEATURE_SOURCES[key].KEY = key; });
 const getSourceURL = sourceId => `https://neon.maps.arcgis.com/sharing/rest/content/items/${sourceId}/data`;
+
+const checkFileExists = (filePath) => fs.existsSync(filePath);
 
 
 // Feature data that we extract fdrom above geojson. Note that there is NOT a 1:1 correlation
@@ -116,7 +116,7 @@ const FEATURES = {
     }
   },
   POUR_POINTS: {
-    source: FEATURE_SOURCES.AQUATIC_WATERSHEDS.KEY,
+    source: FEATURE_SOURCES.POUR_POINTS.KEY,
     geojsonFileName: 'NEON_Aquatic_PourPoint',
     getProperties: (properties) => {
       const { SiteID: siteCode } = properties;
@@ -168,17 +168,24 @@ const sanitizeCoordinates = (coords) => {
 // getProperties function comes from FEATURES
 const geojsonToSites = (geojson = {}, getProperties = p => p) => {
   const sites = {};
+
   if (!geojson.features) { return sites; }
 
-  geojson.features.forEach((feature) => {
-    if (!feature.geometry) { return; } 
+  geojson.features.forEach((feature, x) => {
+
+    if (!feature.geometry) { return; }
+
     const geometry = {
       type: feature.geometry.type,
       coordinates: sanitizeCoordinates(feature.geometry.coordinates),
     };
+    // console.log("counter: ", x, feature.properties);
+
     const properties = getProperties(feature.properties);
     const { siteCode, areaKm2 } = properties;
+
     if (!siteCode) { return; }
+
     if (!sites[siteCode]) {
       sites[siteCode] = { type: 'Feature', properties, geometry };
     } else {
@@ -188,6 +195,7 @@ const geojsonToSites = (geojson = {}, getProperties = p => p) => {
       sites[siteCode].geometry.coordinates.push(geometry.coordinates);
     }
   });
+
 
   return sites;
 };
@@ -217,19 +225,27 @@ const GEOJSON_SOURCES = {};
 const generateOutfiles = () => {
   log.info('\n- Generating feature data files');
   Object.keys(FEATURES).forEach((key) => {
+
     const feature = FEATURES[key];
     const { source } = feature;
     if (!source || !GEOJSON_SOURCES[source]) {
       log.error(`- - ${key} unable to generate; invalid source: ${source}`);
       return;
     }
+
     const geojson = (feature.geojsonFileName
       ? GEOJSON_SOURCES[source].find(fc => fc.fileName === feature.geojsonFileName)
       : GEOJSON_SOURCES[source]) || {};
+
+    if (feature.geojsonFileName && !geojson) {
+      log.error(`- - ${key} could not find geojson with fileName ${feature.geojsonFileName}`);
+    }
+
     log.info(`- - ${key} - Parsing sites...`);
     const sites = geojsonToSites(geojson, feature.getProperties);
 
     const expectedSiteCount = Object.keys(sites).length;
+
     if (!expectedSiteCount) {
       log.error(`- - ${key} no sites parsed; aborting`);
       return;
@@ -272,39 +288,49 @@ Object.keys(FEATURE_SOURCES).forEach((key) => {
   log.info(`- - ZIP: ${zipFile} - Fetching...`);
 
   const url = getSourceURL(sourceId);
+  const pathname = path.join(DOWNLOADS_PATH, zipFile);
+  const status = checkFileExists(pathname);
 
-  const promise = fetch(url)
-    .then(res => {
-      return new Promise((resolve, reject) => {
-
-        const dest = fs.createWriteStream(path.join(DOWNLOADS_PATH, zipFile));
-        dest.on('finish', () => {
-          log.success(`- - ZIP: ${zipFile} - Fetched`);
-          resolve(true);
+  log.error(`- - FileExists Status: ${status}`)
+  if (!status) {
+    const promise = fetch(url)
+      .then(res => {
+        return new Promise((resolve, reject) => {
+          const dest = fs.createWriteStream(pathname);
+          dest.on('finish', () => {
+            log.success(`- - ZIP: ${zipFile} - Fetched`);
+            resolve(true);
+          });
+          res.body.pipe(dest);
         });
-        res.body.pipe(dest);
       });
-    });
-  downloadPromises.push(promise);
+    downloadPromises.push(promise);
+  }
 });
 
 // After download is complete: convert all shape files to geojson
 Promise.all(downloadPromises).then(() => {
   log.info('\n- Converting feature source ZIP files to geojson');
+
   Object.keys(FEATURE_SOURCES).forEach((key) => {
+    // Object.keys(featuresJSON).forEach((key) => {
     const featureSource = FEATURE_SOURCES[key];
     const { zipFile } = featureSource;
-    log.info(`- - ZIP: ${zipFile} - Reading...`);
-    fs.readFile(path.join(DOWNLOADS_PATH, zipFile), (err, data) => {
+    const shfilename = path.join(DOWNLOADS_PATH, zipFile);
+
+    log.info(`- - ZIP: ${shfilename} - Reading for ${key} ...`);
+    fs.readFile(shfilename, (err, data) => {
       if (err) {
-        log.warn(`- - ZIP: ${zipFile} unable to read:`);
-        log.error(err, '');
+        log.error(`- - ZIP: unable to read ${zipFile} ${err}`);
         return;
       }
-      log.info(`- - ZIP: ${zipFile} read complete; converting shapes...`);
+
+      log.info(`- - ZIP: ${zipFile} read complete; converting ${key} shapes...`);
       shp(data).then((geojson) => {
+
         GEOJSON_SOURCES[key] = geojson;
         log.success(`- - ZIP: ${zipFile} to geojson conversion complete`);
+
         // Spit out whole geojson if needed for setting up new features
         // const outFile = path.join(ASSETS_PATH, `${key}.json`);
         // fs.writeFileSync(outFile, JSON.stringify(geojson, null, 2));
@@ -313,7 +339,8 @@ Promise.all(downloadPromises).then(() => {
           generateOutfiles();
           finalize();
         }
-	    });
+
+      });
     });
   });
 });
@@ -336,7 +363,7 @@ const finalize = () => {
   fsExtra.emptyDirSync(DOWNLOADS_PATH);
   log.info('- Removing downloads directory');
   fs.rmdirSync(DOWNLOADS_PATH);
-  
+
   // Done!
   const executionTime = (Date.now() - startTime) / 1000;
   log.success(`\nDone. (${executionTime}s)`);
