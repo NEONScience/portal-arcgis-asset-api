@@ -6,6 +6,7 @@ const shp = require('shpjs');
 const fetch = require('node-fetch');
 const log = require('./logger');
 
+process.env.NODE_ENV = 'DEVELOPMENT';
 
 class AssetBuilder {
   startTime = '';
@@ -16,8 +17,6 @@ class AssetBuilder {
 
   constructor() {
     this.startTime = Date.now();
-    process.env.NODE_ENV = 'DEVELOPMENT';
-
 
     this.DOWNLOADS_PATH = path.join(__dirname, 'downloads');
     this.ASSETS_PATH = path.join(__dirname, 'assets');
@@ -331,6 +330,6 @@ class AssetBuilder {
 }
 
 (async () => {
-  const builder = new AssetBuilder();
-  await builder.run();
+  const assetBuilder = new AssetBuilder();
+  await assetBuilder.run();
 })();
