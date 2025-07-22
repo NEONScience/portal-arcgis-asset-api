@@ -94,7 +94,7 @@ class AssetBuilder {
       },
       WATERSHED_BOUNDARIES: {
         source: this.FEATURE_SOURCES.AQUATIC_WATERSHEDS.KEY,
-        geojsonFileName: 'NEON_Aquatic_Watershed',
+        geojsonFileName: 'NEONAquaticWatershed/NEON_Aquatic_Watershed',
         getProperties: (properties) => {
           const { SiteID: siteCode, UTM_Zone, WSAreaKm2 } = properties;
           const areaKm2 = parseFloat(WSAreaKm2, 10);
@@ -103,20 +103,20 @@ class AssetBuilder {
       },
       DRAINAGE_LINES: {
         source: this.FEATURE_SOURCES.AQUATIC_WATERSHEDS.KEY,
-        geojsonFileName: 'NEON_Aquatic_DrainageLine',
+        geojsonFileName: 'NEONAquaticWatershed/NEON_Aquatic_DrainageLine',
         getProperties: (properties) => {
           const { SiteID: siteCode } = properties;
           return { siteCode };
         }
       },
       POUR_POINTS: {
-        source: this.FEATURE_SOURCES.POUR_POINTS.KEY,
-        geojsonFileName: 'NEON_Aquatic_PourPoint',
+        source: this.FEATURE_SOURCES.AQUATIC_WATERSHEDS.KEY,
+        geojsonFileName: 'NEONAquaticWatershed/NEON_Aquatic_PourPoint',
         getProperties: (properties) => {
           const { SiteID: siteCode } = properties;
           return { siteCode };
         }
-      },
+      }
     };
 
     this.featuresJSON = {};
@@ -203,8 +203,9 @@ class AssetBuilder {
       }
       const geojson = (feature.geojsonFileName
         ? this.GEOJSON_SOURCES[source].find(fc => {
-          log.debug("%s === %s, Status: ", fc.fileName, feature.geojsonFileName, fc.fileName.includes(feature.geojsonFileName))
-          return fc.fileName.includes(feature.geojsonFileName);
+          // log.debug("%s === %s, Status: ", fc.fileName, feature.geojsonFileName, fc.fileName.includes(feature.geojsonFileName))
+          // return fc.fileName.includes(feature.geojsonFileName);
+          return fc.fileName === feature.geojsonFileName;
         })
         : this.GEOJSON_SOURCES[source]) || {};
      
