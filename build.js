@@ -196,13 +196,10 @@ class AssetBuilder {
       }
       const geojson = (feature.geojsonFileName
         ? this.GEOJSON_SOURCES[source].find(fc => {
-          // console.log("%s === %s, Status: ", fc.fileName, feature.geojsonFileName, fc.fileName.includes(feature.geojsonFileName))
+          this.log.debug("%s === %s, Status: ", fc.fileName, feature.geojsonFileName, fc.fileName.includes(feature.geojsonFileName))
           return fc.fileName.includes(feature.geojsonFileName);
         })
         : this.GEOJSON_SOURCES[source]) || {};
-
-        // console.log("===>>>", geojson)
-        // console.log(source, "===>>>>", feature.geojsonFileName);
      
       if (feature.geojsonFileName && !geojson) {
         this.log.error(`- - ${key} could not find geojson with fileName ${feature.geojsonFileName}\n`);
@@ -271,7 +268,7 @@ class AssetBuilder {
       const url = this.getSourceURL(sourceId);
       const pathname = this.path.join(this.DOWNLOADS_PATH, zipFile);
       const status = this.checkFileExists(pathname);
-      this.log.info(`- - FileExists Status: ${status}`)
+
       if (!status) {
         const promise = this.fetch(url)
           .then(res => {
@@ -285,30 +282,31 @@ class AssetBuilder {
             });
           });
         downloadPromises.push(promise);
+      } else {
+        this.log.info(`- - FileExists: "${zipFile}" Status: ${status} -- will not download again...`)
       }
     });
 
     await Promise.all(downloadPromises);
-    this.log.info('\n\n- Converting feature source ZIP files to geojson');
+    this.log.info('\n- Converting feature source ZIP files to geojson');
 
     const geojsonPromises = Object.keys(this.FEATURE_SOURCES).map((key) => {
       return new Promise((resolve) => {
         const featureSource = this.FEATURE_SOURCES[key];
         const { zipFile } = featureSource;
         const shfilename = this.path.join(this.DOWNLOADS_PATH, zipFile);
-        this.log.info(`- - ZIP: ${shfilename} - Reading for ${key} ...`);
+        this.log.info(`- - ZIP: ${zipFile} - Reading for ${key} ...`);
         this.fs.readFile(shfilename, (err, data) => {
           if (err) {
             this.log.error(`- - ZIP: unable to read ${zipFile} ${err}\n\n`);
-            resolve(false);
-            return;
+            return resolve(false);
           }
           this.log.info(`- - ZIP: ${zipFile} read complete; converting ${key} shapes...`);
           this.shp(data).then((geojson) => {
             this.GEOJSON_SOURCES[key] = geojson;
             this.log.success(`- - ZIP: ${zipFile} to geojson conversion complete\n\n`);
             this.FEATURE_SOURCES[key].parsed = true;
-            resolve(true);
+            return resolve(true);
           });
         });
       });
