@@ -189,13 +189,21 @@ class AssetBuilder {
     Object.keys(this.FEATURES).forEach((key) => {
       const feature = this.FEATURES[key];
       const { source } = feature;
+
       if (!source || !this.GEOJSON_SOURCES[source]) {
         this.log.error(`- - ${key} unable to generate; invalid source: ${source}`);
         return;
       }
       const geojson = (feature.geojsonFileName
-        ? this.GEOJSON_SOURCES[source].find(fc => fc.fileName === feature.geojsonFileName)
+        ? this.GEOJSON_SOURCES[source].find(fc => {
+          // console.log("%s === %s, Status: ", fc.fileName, feature.geojsonFileName, fc.fileName.includes(feature.geojsonFileName))
+          return fc.fileName.includes(feature.geojsonFileName);
+        })
         : this.GEOJSON_SOURCES[source]) || {};
+
+        // console.log("===>>>", geojson)
+        // console.log(source, "===>>>>", feature.geojsonFileName);
+     
       if (feature.geojsonFileName && !geojson) {
         this.log.error(`- - ${key} could not find geojson with fileName ${feature.geojsonFileName}\n`);
       }
@@ -207,6 +215,7 @@ class AssetBuilder {
         this.log.error(`- - ${key} no sites parsed; aborting`);
         return;
       }
+
       Object.keys(sites)
         .sort()
         .forEach((siteCode) => {
@@ -262,7 +271,7 @@ class AssetBuilder {
       const url = this.getSourceURL(sourceId);
       const pathname = this.path.join(this.DOWNLOADS_PATH, zipFile);
       const status = this.checkFileExists(pathname);
-      this.log.error(`- - FileExists Status: ${status}`)
+      this.log.info(`- - FileExists Status: ${status}`)
       if (!status) {
         const promise = this.fetch(url)
           .then(res => {
@@ -291,7 +300,7 @@ class AssetBuilder {
         this.fs.readFile(shfilename, (err, data) => {
           if (err) {
             this.log.error(`- - ZIP: unable to read ${zipFile} ${err}\n\n`);
-            resolve();
+            resolve(false);
             return;
           }
           this.log.info(`- - ZIP: ${zipFile} read complete; converting ${key} shapes...`);
@@ -299,7 +308,7 @@ class AssetBuilder {
             this.GEOJSON_SOURCES[key] = geojson;
             this.log.success(`- - ZIP: ${zipFile} to geojson conversion complete\n\n`);
             this.FEATURE_SOURCES[key].parsed = true;
-            resolve();
+            resolve(true);
           });
         });
       });
