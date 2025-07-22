@@ -101,7 +101,7 @@ const getAssetData = (feature, siteCode) => {
   const assetKey = getAssetKey(feature, siteCode);
   return new Promise ((resolve, reject) => {
     cache.read(assetKey, (err, assetData) => {
-      if (err || assetData === undefined) { return resolve(); }
+      if (err || !assetData) { return resolve(); }
       resolve(Buffer.from(assetData));
     });
   });
@@ -188,6 +188,38 @@ if (cluster.isMaster) {
       /**
          Routes
       */
+      // Add a root route that lists all available API routes
+      router.get('/', (ctx, next) => {
+        ctx.body = {
+          routes: [
+            {
+              method: 'GET',
+              path: '/',
+              description: 'List all available API routes.'
+            },
+            {
+              method: 'GET',
+              path: '/health',
+              description: 'Health check endpoint.'
+            },
+            {
+              method: 'GET',
+              path: `${API_ROOT}/`,
+              description: 'List all feature keys.'
+            },
+            {
+              method: 'GET',
+              path: `${API_ROOT}/:feature`,
+              description: 'List all valid site codes for a given feature.'
+            },
+            {
+              method: 'GET',
+              path: `${API_ROOT}/:feature/:siteCode`,
+              description: 'Return the corresponding asset JSON for the given feature and site code.'
+            }
+          ]
+        };
+      });
       // /health - health check; if we're running we're good.
       // Buried below API root since it's only checked internally.
       router.get('/health', (ctx, next) => {
