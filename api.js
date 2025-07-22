@@ -17,11 +17,16 @@ const ASSETS_PATH = './assets';
 const API_ROOT = '/api/v0/arcgis-assets';
 const CPU_COUNT = os.cpus().length;
 
+const log = require('./logger');
+
+
 const logWithPid = (msg, isError = false) => (
   isError
-    ? console.error(`[PID ${process.pid}] ERROR: ${msg}`)
-    : console.log(`[PID ${process.pid}] ${msg}`)
+    ? log.error(`[PID ${process.pid}] ERROR: ${msg}`)
+    : log.info(`[PID ${process.pid}] ${msg}`)
 );
+
+const PORT = process.env.PORT || 3100;
 
 /**
    General Cache Functions
@@ -87,6 +92,8 @@ const cacheAllAssets = async () => {
       cachePromises.push(promise);
     });
   });
+
+
   return Promise.allSettled(cachePromises);
 }
 
@@ -94,7 +101,7 @@ const getAssetData = (feature, siteCode) => {
   const assetKey = getAssetKey(feature, siteCode);
   return new Promise ((resolve, reject) => {
     cache.read(assetKey, (err, assetData) => {
-      if (err || assetData === undefined) { return resolve(); }
+      if (err || !assetData) { return resolve(); }
       resolve(Buffer.from(assetData));
     });
   });
@@ -144,7 +151,8 @@ if (cluster.isMaster) {
   const cacheWarmer = cluster.fork();
   cacheWarmer.on('message', (msg) => {
     if (msg.error) {
-      clogWithPid(msg.error, true);
+      logWithPid(msg.error, true);
+      log.error(msg.error);
       process.exit(1);
     }
     if (msg.cacheIsReady && CPU_COUNT > 1) {
@@ -180,6 +188,38 @@ if (cluster.isMaster) {
       /**
          Routes
       */
+      // Add a root route that lists all available API routes
+      router.get('/', (ctx, next) => {
+        ctx.body = {
+          routes: [
+            {
+              method: 'GET',
+              path: '/',
+              description: 'List all available API routes.'
+            },
+            {
+              method: 'GET',
+              path: '/health',
+              description: 'Health check endpoint.'
+            },
+            {
+              method: 'GET',
+              path: `${API_ROOT}/`,
+              description: 'List all feature keys.'
+            },
+            {
+              method: 'GET',
+              path: `${API_ROOT}/:feature`,
+              description: 'List all valid site codes for a given feature.'
+            },
+            {
+              method: 'GET',
+              path: `${API_ROOT}/:feature/:siteCode`,
+              description: 'Return the corresponding asset JSON for the given feature and site code.'
+            }
+          ]
+        };
+      });
       // /health - health check; if we're running we're good.
       // Buried below API root since it's only checked internally.
       router.get('/health', (ctx, next) => {
@@ -219,7 +259,7 @@ if (cluster.isMaster) {
           return;
         }
         const assetData = await getAssetData(ctx.params.feature, ctx.params.siteCode);
-        if (assetData === undefined) {
+        if (!assetData) {
           ctx.status = 404;
           ctx.body = 'Feature and Site Code are valid but asset not found';
           return;
@@ -233,8 +273,8 @@ if (cluster.isMaster) {
       */
       api.use(router.routes());
       api.use(router.allowedMethods());
-      api.listen(3100);
-      logWithPid('Worker started');
+      api.listen(PORT);
+      logWithPid(`Worker started on port http://localhost:${PORT}`);
     });
 
 }
