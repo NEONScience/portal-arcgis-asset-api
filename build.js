@@ -1,18 +1,26 @@
 'use strict';
+const path = require('path');
+const fs = require('fs');
+const fsExtra = require('fs-extra');
+const shp = require('shpjs');
+const fetch = require('node-fetch');
+const log = require('./logger');
+
 
 class AssetBuilder {
+  startTime = '';
+  FEATURE_SOURCES = [];
+  DOWNLOADS_PATH = '';
+  ASSETS_PATH = '';
+  FEATURES = '';
+
   constructor() {
     this.startTime = Date.now();
     process.env.NODE_ENV = 'DEVELOPMENT';
-    this.path = require('path');
-    this.fs = require('fs');
-    this.fsExtra = require('fs-extra');
-    this.shp = require('shpjs');
-    this.fetch = require('node-fetch');
-    this.log = require('./logger');
 
-    this.DOWNLOADS_PATH = this.path.join(__dirname, 'downloads');
-    this.ASSETS_PATH = this.path.join(__dirname, 'assets');
+
+    this.DOWNLOADS_PATH = path.join(__dirname, 'downloads');
+    this.ASSETS_PATH = path.join(__dirname, 'assets');
 
     this.FEATURE_SOURCES = {
       TOWER_AIRSHEDS: {
@@ -54,7 +62,7 @@ class AssetBuilder {
 
     Object.keys(this.FEATURE_SOURCES).forEach((key) => { this.FEATURE_SOURCES[key].KEY = key; });
     this.getSourceURL = sourceId => `https://neon.maps.arcgis.com/sharing/rest/content/items/${sourceId}/data`;
-    this.checkFileExists = (filePath) => this.fs.existsSync(filePath);
+    this.checkFileExists = (filePath) => fs.existsSync(filePath);
 
     this.FEATURES = {
       TOWER_AIRSHEDS: {
@@ -126,7 +134,7 @@ class AssetBuilder {
       if ((coords.length === 2 || coords.length === 3) && coords.every(c => Number.isFinite(c))) {
         if (coords.length === 3) {
           if (coords[2] !== 0) {
-            this.log.warn(`Identified coord with non-zero z: ${coords}`);
+            log.warn(`Identified coord with non-zero z: ${coords}`);
           }
         }
         const [x, y] = coords;
@@ -134,10 +142,10 @@ class AssetBuilder {
           sanitizedCoords.push(y);
           sanitizedCoords.push(x);
         } else {
-          this.log.warn(`Identified coord with negative x: ${coords}`);
+          log.warn(`Identified coord with negative x: ${coords}`);
         }
       } else {
-        this.log.warn(`Failed to determine state of coords: ${coords}`);
+        log.warn(`Failed to determine state of coords: ${coords}`);
       }
     }
     return sanitizedCoords;
@@ -171,45 +179,45 @@ class AssetBuilder {
     if (!Object.keys(this.FEATURES).includes(featureKey)) { return 0; }
     let count = 0;
     try {
-      const outDir = this.path.join(this.ASSETS_PATH, featureKey);
-      this.fs.mkdirSync(outDir);
+      const outDir = path.join(this.ASSETS_PATH, featureKey);
+      fs.mkdirSync(outDir);
       Object.keys(sitesData).forEach((siteCode) => {
-        const outFile = this.path.join(outDir, `${siteCode}.json`);
-        this.fs.writeFileSync(outFile, JSON.stringify(sitesData[siteCode]));
+        const outFile = path.join(outDir, `${siteCode}.json`);
+        fs.writeFileSync(outFile, JSON.stringify(sitesData[siteCode]));
         count += 1;
       });
     } catch (err) {
-      this.log.error(err);
+      log.error(err);
     }
     return count;
   }
 
   generateOutfiles() {
-    this.log.info('\n- Generating feature data files');
+    log.info('\n- Generating feature data files');
     Object.keys(this.FEATURES).forEach((key) => {
       const feature = this.FEATURES[key];
       const { source } = feature;
 
       if (!source || !this.GEOJSON_SOURCES[source]) {
-        this.log.error(`- - ${key} unable to generate; invalid source: ${source}`);
+        log.error(`- - ${key} unable to generate; invalid source: ${source}`);
         return;
       }
       const geojson = (feature.geojsonFileName
         ? this.GEOJSON_SOURCES[source].find(fc => {
-          this.log.debug("%s === %s, Status: ", fc.fileName, feature.geojsonFileName, fc.fileName.includes(feature.geojsonFileName))
+          log.debug("%s === %s, Status: ", fc.fileName, feature.geojsonFileName, fc.fileName.includes(feature.geojsonFileName))
           return fc.fileName.includes(feature.geojsonFileName);
         })
         : this.GEOJSON_SOURCES[source]) || {};
      
       if (feature.geojsonFileName && !geojson) {
-        this.log.error(`- - ${key} could not find geojson with fileName ${feature.geojsonFileName}\n`);
+        log.error(`- - ${key} could not find geojson with fileName ${feature.geojsonFileName}\n`);
       }
 
-      this.log.info(`- - ${key} - Parsing sites...`);
+      log.info(`- - ${key} - Parsing sites...`);
       const sites = this.geojsonToSites(geojson, feature.getProperties);
       const expectedSiteCount = Object.keys(sites).length;
       if (!expectedSiteCount) {
-        this.log.error(`- - ${key} no sites parsed; aborting`);
+        log.error(`- - ${key} no sites parsed; aborting`);
         return;
       }
 
@@ -218,64 +226,64 @@ class AssetBuilder {
         .forEach((siteCode) => {
           this.featuresJSON[key].push(siteCode);
         });
-      this.log.info(`- - ${key} - Writing site JSON files...`);
+      log.info(`- - ${key} - Writing site JSON files...`);
       const resultSiteCount = this.generateFeatureSiteFilesDirectory(key, sites);
       if (resultSiteCount !== expectedSiteCount) {
-        this.log.error(`- - ${key} expected ${expectedSiteCount} site files; ${resultSiteCount} generated:`);
+        log.error(`- - ${key} expected ${expectedSiteCount} site files; ${resultSiteCount} generated:`);
       } else {
-        this.log.success(`- - ${key} generated ${resultSiteCount} site files\n`);
+        log.success(`- - ${key} generated ${resultSiteCount} site files\n`);
       }
     });
   }
 
   finalize() {
-    this.log.info('\n- Regenerating features.json');
+    log.info('\n- Regenerating features.json');
     try {
-      const stats = this.fs.statSync('./features.json');
-      this.log.info(`- - Deleting existing features.json...`);
-      this.fs.unlinkSync('./features.json');
+      fs.statSync('./features.json');
+      log.info(`- - Deleting existing features.json...`);
+      fs.unlinkSync('./features.json');
     } catch (err) {
       // features.json doesn't exist; do nothing
     }
-    this.fs.writeFileSync('./features.json', JSON.stringify(this.featuresJSON));
-    this.log.success(`- - Regenerated features.json successfully`);
-    this.log.info('\n- Clearing downloads directory');
-    this.fsExtra.emptyDirSync(this.DOWNLOADS_PATH);
-    this.log.info('- Removing downloads directory');
-    this.fs.rmdirSync(this.DOWNLOADS_PATH);
+    fs.writeFileSync('./features.json', JSON.stringify(this.featuresJSON));
+    log.success(`- - Regenerated features.json successfully`);
+    log.info('\n- Clearing downloads directory');
+    fsExtra.emptyDirSync(this.DOWNLOADS_PATH);
+    log.info('- Removing downloads directory');
+    fs.rmdirSync(this.DOWNLOADS_PATH);
     const executionTime = (Date.now() - this.startTime) / 1000;
-    this.log.success(`\nDone. (${executionTime}s)`);
+    log.success(`\nDone. (${executionTime}s)`);
   }
 
   async run() {
-    this.log.info('=== Building Deferred JSON Artifacts ===\n');
-    this.log.info('- Clearing assets directory');
-    this.fsExtra.emptyDirSync(this.ASSETS_PATH);
-    this.log.info('- Making downloads directory');
+    log.info('=== Building Deferred JSON Artifacts ===\n');
+    log.info('- Clearing assets directory');
+    fsExtra.emptyDirSync(this.ASSETS_PATH);
+    log.info('- Making downloads directory');
     try {
-      const downloadsStats = this.fs.statSync(this.DOWNLOADS_PATH);
-      this.fsExtra.emptyDirSync(this.DOWNLOADS_PATH);
-      this.fs.rmdirSync(this.DOWNLOADS_PATH);
+      const downloadsStats = fs.statSync(this.DOWNLOADS_PATH);
+      fsExtra.emptyDirSync(this.DOWNLOADS_PATH);
+      fs.rmdirSync(this.DOWNLOADS_PATH);
     } catch (err) {
       // downloads dir doesn't exist; do nothing
     }
-    this.fs.mkdirSync(this.DOWNLOADS_PATH);
+    fs.mkdirSync(this.DOWNLOADS_PATH);
     const downloadPromises = [];
 
     Object.keys(this.FEATURE_SOURCES).forEach((key) => {
       const { sourceId, zipFile } = this.FEATURE_SOURCES[key];
-      this.log.info(`- - ZIP: ${zipFile} - Fetching...`);
+      log.info(`- - ZIP: ${zipFile} - Fetching...`);
       const url = this.getSourceURL(sourceId);
-      const pathname = this.path.join(this.DOWNLOADS_PATH, zipFile);
+      const pathname = path.join(this.DOWNLOADS_PATH, zipFile);
       const status = this.checkFileExists(pathname);
 
       if (!status) {
-        const promise = this.fetch(url)
+        const promise = fetch(url)
           .then(res => {
             return new Promise((resolve, reject) => {
-              const dest = this.fs.createWriteStream(pathname);
+              const dest = fs.createWriteStream(pathname);
               dest.on('finish', () => {
-                this.log.success(`- - ZIP: ${zipFile} - Fetched`);
+                log.success(`- - ZIP: ${zipFile} - Fetched`);
                 resolve(true);
               });
               res.body.pipe(dest);
@@ -283,28 +291,28 @@ class AssetBuilder {
           });
         downloadPromises.push(promise);
       } else {
-        this.log.info(`- - FileExists: "${zipFile}" Status: ${status} -- will not download again...`)
+        log.info(`- - FileExists: "${zipFile}" Status: ${status} -- will not download again...`)
       }
     });
 
     await Promise.all(downloadPromises);
-    this.log.info('\n- Converting feature source ZIP files to geojson');
+    log.info('\n- Converting feature source ZIP files to geojson');
 
     const geojsonPromises = Object.keys(this.FEATURE_SOURCES).map((key) => {
       return new Promise((resolve) => {
         const featureSource = this.FEATURE_SOURCES[key];
         const { zipFile } = featureSource;
-        const shfilename = this.path.join(this.DOWNLOADS_PATH, zipFile);
-        this.log.info(`- - ZIP: ${zipFile} - Reading for ${key} ...`);
-        this.fs.readFile(shfilename, (err, data) => {
+        const shfilename = path.join(this.DOWNLOADS_PATH, zipFile);
+        log.info(`- - ZIP: ${zipFile} - Reading for ${key} ...`);
+        fs.readFile(shfilename, (err, data) => {
           if (err) {
-            this.log.error(`- - ZIP: unable to read ${zipFile} ${err}\n\n`);
+            log.error(`- - ZIP: unable to read ${zipFile} ${err}\n\n`);
             return resolve(false);
           }
-          this.log.info(`- - ZIP: ${zipFile} read complete; converting ${key} shapes...`);
-          this.shp(data).then((geojson) => {
+          log.info(`- - ZIP: ${zipFile} read complete; converting ${key} shapes...`);
+          shp(data).then((geojson) => {
             this.GEOJSON_SOURCES[key] = geojson;
-            this.log.success(`- - ZIP: ${zipFile} to geojson conversion complete\n\n`);
+            log.success(`- - ZIP: ${zipFile} to geojson conversion complete\n\n`);
             this.FEATURE_SOURCES[key].parsed = true;
             return resolve(true);
           });
@@ -315,6 +323,10 @@ class AssetBuilder {
     await Promise.all(geojsonPromises);
     this.generateOutfiles();
     this.finalize();
+  }
+
+  destructor() {
+    // do any clean up...
   }
 }
 
