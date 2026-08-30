@@ -16,17 +16,14 @@ const cache = require('memored');
 const ASSETS_PATH = './assets';
 const API_ROOT = '/api/v0/arcgis-assets';
 const CPU_COUNT = os.cpus().length;
-
-const log = require('./logger');
-
+const MAX_WORKERS = 3;
+const ignorePaths = ['/health'];
 
 const logWithPid = (msg, isError = false) => (
   isError
-    ? log.error(`[PID ${process.pid}] ERROR: ${msg}`)
-    : log.info(`[PID ${process.pid}] ${msg}`)
+    ? console.error(`[PID ${process.pid}] ERROR: ${msg}`)
+    : console.info(`[PID ${process.pid}] ${msg}`)
 );
-
-const PORT = process.env.PORT || 3100;
 
 /**
    General Cache Functions
@@ -92,8 +89,6 @@ const cacheAllAssets = async () => {
       cachePromises.push(promise);
     });
   });
-
-
   return Promise.allSettled(cachePromises);
 }
 
@@ -101,7 +96,7 @@ const getAssetData = (feature, siteCode) => {
   const assetKey = getAssetKey(feature, siteCode);
   return new Promise ((resolve, reject) => {
     cache.read(assetKey, (err, assetData) => {
-      if (err || !assetData) { return resolve(); }
+      if (err || assetData === undefined) { return resolve(); }
       resolve(Buffer.from(assetData));
     });
   });
@@ -132,7 +127,7 @@ const verifyOrBuildCache = async () => {
     const successfulAssets = assetCacheResults.filter(res => res.status === 'fulfilled').length;
     const failedAssets = assetCacheResults.length - successfulAssets;
     logWithPid(`Asset cache: ${successfulAssets} of ${assetCacheResults.length} OK; ${failedAssets} failed.`);
-    // Mark cache as initialized and inform the master that the cache is ready
+    // Mark cache as initialized and inform the primary that the cache is ready
     await promiseCacheStore('initialized', true);
     logWithPid('Cache is now ready');
     process.send({ cacheIsReady: true });
@@ -141,22 +136,22 @@ const verifyOrBuildCache = async () => {
 };
 
 /**
-   Master thread - validate environment and spawn forks
+   Primary thread - validate environment and spawn forks
 */
-if (cluster.isMaster) {
-  logWithPid(`Master is running; ${CPU_COUNT} available CPUs`);
+if (cluster.isPrimary) {
+  const appliedNumWorkers = Math.min(CPU_COUNT, MAX_WORKERS);
+  logWithPid(`Primary is running; starting ${appliedNumWorkers} workers`);
 
-  // Spawn first worker to warm the cache. Listen for messages and kill the master thread if cache
+  // Spawn first worker to warm the cache. Listen for messages and kill the primary thread if cache
   // building failed for any reason. Otherwise spawn the remaining workers.
   const cacheWarmer = cluster.fork();
   cacheWarmer.on('message', (msg) => {
     if (msg.error) {
       logWithPid(msg.error, true);
-      log.error(msg.error);
       process.exit(1);
     }
-    if (msg.cacheIsReady && CPU_COUNT > 1) {
-      for (let i = 1; i < CPU_COUNT; i++) {
+    if (msg.cacheIsReady && appliedNumWorkers > 1) {
+      for (let i = 1; i < appliedNumWorkers; i++) {
         cluster.fork();
       }
     }
@@ -177,7 +172,12 @@ if (cluster.isMaster) {
       const api = new Koa();
       const router = new Router();
       api.use(Cors({ origin: '*', allowMethods: ['GET'] }));
-      api.use(Logger());
+      api.use(async (ctx, next) => {
+        if (ignorePaths.includes(ctx.path)) {
+          return next();
+        }
+        return Logger()(ctx, next);
+      });
       api.use(Favicon(__dirname + '/public/favicon.ico'));
 
       /**
@@ -188,38 +188,6 @@ if (cluster.isMaster) {
       /**
          Routes
       */
-      // Add a root route that lists all available API routes
-      router.get('/', (ctx, next) => {
-        ctx.body = {
-          routes: [
-            {
-              method: 'GET',
-              path: '/',
-              description: 'List all available API routes.'
-            },
-            {
-              method: 'GET',
-              path: '/health',
-              description: 'Health check endpoint.'
-            },
-            {
-              method: 'GET',
-              path: `${API_ROOT}/`,
-              description: 'List all feature keys.'
-            },
-            {
-              method: 'GET',
-              path: `${API_ROOT}/:feature`,
-              description: 'List all valid site codes for a given feature.'
-            },
-            {
-              method: 'GET',
-              path: `${API_ROOT}/:feature/:siteCode`,
-              description: 'Return the corresponding asset JSON for the given feature and site code.'
-            }
-          ]
-        };
-      });
       // /health - health check; if we're running we're good.
       // Buried below API root since it's only checked internally.
       router.get('/health', (ctx, next) => {
@@ -259,7 +227,7 @@ if (cluster.isMaster) {
           return;
         }
         const assetData = await getAssetData(ctx.params.feature, ctx.params.siteCode);
-        if (!assetData) {
+        if (assetData === undefined) {
           ctx.status = 404;
           ctx.body = 'Feature and Site Code are valid but asset not found';
           return;
@@ -273,8 +241,8 @@ if (cluster.isMaster) {
       */
       api.use(router.routes());
       api.use(router.allowedMethods());
-      api.listen(PORT);
-      logWithPid(`Worker started on port http://localhost:${PORT}`);
+      api.listen(3100);
+      logWithPid('Worker started');
     });
 
 }
