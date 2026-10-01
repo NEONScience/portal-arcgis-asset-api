@@ -1,29 +1,29 @@
 {
   "name": "portal-arcgis-asset-api",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "homepage": "https://github.com/NEONScience/portal-arcgis-asset-api",
   "description": "A lightweight API for serving assets from the Neon ArcGIS Gallery as GeoJSON implemented in Koa",
   "main": "index.js",
   "private": true,
   "scripts": {
-    "dev": "nodemon api.js"
+    "dev": "node api.js",
+    "build": "node build.mjs"
   },
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@koa/cors": "^5.0.0",
     "cluster": "^0.7.7",
-    "koa": "^2.13.0",
+    "koa": "^3.2.1",
     "koa-favicon": "^2.1.0",
-    "koa-logger": "^3.2.1",
-    "koa-router": "^9.1.0",
-    "memored": "^1.1.1",
-    "winston": "^3.17.0"
+    "koa-logger": "^4.0.0",
+    "koa-router": "^14.0.0",
+    "memored": "^1.1.1"
   },
   "devDependencies": {
-    "chalk": "^4.1.0",
-    "fs-extra": "^9.0.1",
-    "node-fetch": "^2.6.1",
-    "shpjs": "^3.5.0"
+    "chalk": "^6.0.0",
+    "fs-extra": "^11.4.0",
+    "node-fetch": "^3.3.2",
+    "shpjs": "^6.2.0"
   }
 }
